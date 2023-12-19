@@ -27,9 +27,6 @@
     <ClInclude Include="DependencyMetadata.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GithubAPI.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="miniz.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -51,9 +48,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Curl.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Github.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
