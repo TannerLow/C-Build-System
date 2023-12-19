@@ -3,6 +3,11 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# custom ignores
+C-Build-System/lib
+C-Build-System/PackageCache
+C-Build-System/include
+
 # User-specific files
 *.rsuser
 *.suo
