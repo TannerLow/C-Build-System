@@ -60,7 +60,6 @@ void remoteLocalMixTest() {
 
 #include <stdio.h>
 #include "DependencyGraph.h"
-#include "GithubAPI.h"
 #include <filesystem>
 #include "Dependency.h"
 #include <stack>
@@ -78,10 +77,35 @@ int errorCode(ErrorCode code) {
 }
 
 #include "MinizWrapper.h"
+#include "Makefile.h"
+#include "Template.h"
 
 // Gather dependencies based on dependency config. Will recursively gather all 
 // dependency configs into /DependencyConfigs
 int defaultBuild() {
+	std::cout << make::makefile << std::endl;
+
+	// Future feature idea: Make a command line arg to specify your own makefile template
+	Template makefileTemplate(make::makefile);
+
+	std::cout << "Keys:" << std::endl;
+	for (auto key : makefileTemplate.getKeys()) {
+		std::cout << key << std::endl;
+	}
+
+	// dynamically load these based on a config or command prompt input
+	std::map<std::string, std::string> makefileInserts;
+	makefileInserts["modules"] = ". device matrix util";
+	makefileInserts["includes"] = "-I \"./include\" -I \"./include/OpenCL/Nvidia\"";
+
+	makefileTemplate.fillTemplate(makefileInserts);
+
+	std::ofstream makefile("makefile");
+	if (makefile.is_open()) {
+		makefile << makefileTemplate.getFilledTemplate();
+		makefile.close();
+	}
+
 //	PackageCache\TannerLow\C-Matrix-Library\v1.0
 	//fs::create_directories("./include/dependencies");
 

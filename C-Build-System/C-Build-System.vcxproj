@@ -29,7 +29,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
@@ -42,7 +42,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
@@ -148,14 +148,17 @@
     <ClInclude Include="Dependency.h" />
     <ClInclude Include="DependencyGraph.h" />
     <ClInclude Include="DependencyMetadata.h" />
+    <ClInclude Include="Makefile.h" />
     <ClInclude Include="miniz.h" />
     <ClInclude Include="MinizWrapper.h" />
+    <ClInclude Include="Template.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Curl.cpp" />
     <ClCompile Include="DependencyGraph.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="miniz.c" />
+    <ClCompile Include="Template.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="build.cfg" />
