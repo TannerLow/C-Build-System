@@ -74,7 +74,7 @@ bool Template::fillTemplate(const std::map<std::string, std::string>& inserts) {
 			return false;
 		}
 		std::string insertValue = it->second;
-		std::string templateLeftSide = filledOutTemplate.substr(0 + offset, fillIn.second.first);
+		std::string templateLeftSide = filledOutTemplate.substr(0, fillIn.second.first + offset);
 		std::string templateRightSide = filledOutTemplate.substr(fillIn.second.second+1 + offset);
 		filledOutTemplate = templateLeftSide + insertValue + templateRightSide;
 

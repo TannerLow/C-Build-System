@@ -2,6 +2,16 @@
 #include <string>
 
 namespace make {
+	/*
+	Parameters (keys):
+	- modules
+	- includes
+	- platform
+	- libs
+	- debugLibs
+	- library
+	- debugLibrary
+	*/
 	std::string makefile =
 		"# GNU Make docs: https://www.gnu.org/software/make/manual/make.html\n"
 		"# Quick tutorial: https://www.cs.colby.edu/maxwell/courses/tutorials/maketutor/\n"
@@ -11,7 +21,14 @@ namespace make {
 		"AR := ar\n"
 		"override CFLAGS := $(sort -Wall -Wextra $(CFLAGS))\n"
 		"\n"
-		"MODULES := {{modules}}\n"
+		"# Generate a recursive list of subdirectories of src\n"
+		"DIR = src\n"
+		"recurse = $(foreach D,$1,$(wildcard $D/*) $(call recurse,$(patsubst %/.,%,$(wildcard $D/*/.))))\n"
+		"dirpaths := $(call recurse,$(DIR))\n"
+		"is_directory = $(wildcard $(1)/*)\n"
+		"_MODULES := . $(foreach path,$(dirpaths),$(if $(call is_directory,$(path)),$(path)))\n"
+		"MODULES :=  $(subst src/,,$(_MODULES))\n"
+		"\n"
 		"SRC_DIR := $(addprefix src/,$(MODULES))\n"
 		"SRC := $(foreach sdir, $(SRC_DIR),$(wildcard $(sdir)/*.c))\n"
 		"OBJ = $(patsubst %.c,build/release/%.o,$(SRC))\n"

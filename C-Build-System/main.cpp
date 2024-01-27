@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <fstream>
 #include <iostream>
+#include <regex>
 
 // If you are on Windows Server 2019 or Windows 10 version 1803 or later, your OS already set up and ready to use.
 // Default path is C : \Windows\System32\curl.exe
@@ -67,9 +68,19 @@ void remoteLocalMixTest() {
 namespace fs = std::filesystem;
 
 enum class ErrorCode {
-	SUCCESS,
-	TOO_MANY_CMD_ARGS,
-	EMPTY_OR_MISSING_CONFIG
+	SUCCESS = 0,
+	TOO_FEW_CMD_ARGS,
+	EMPTY_OR_MISSING_CONFIG,
+	UNRESOLVED_ACTION,
+	INVALID_PROJECT_NAME,
+	UNIMPLEMENTED,
+	COULD_NOT_CREATE_DIRECTORY,
+	CONFLICTING_PROJECT_DIRECTORY,
+	MAKEFILE_TEMPLATE_ERROR,
+	MAKEFILE_CREATION_ERROR,
+	DEPENDENCIES_CONFIG_CREATION_ERROR,
+	INVALID_MAKEFILE_INPUT,
+	COULD_NOT_CREATE_FILE,
 };
 
 int errorCode(ErrorCode code) {
@@ -188,9 +199,157 @@ int newCurlTest() {
 	return errorCode(ErrorCode::SUCCESS);
 }
 
-int unexpectedArgCount(int argc) {
-	printf("[Error] Too many arguments provided: %d arguments provided\n", argc);
-	return errorCode(ErrorCode::TOO_MANY_CMD_ARGS);
+int unexpectedArgCount() {
+	printf("[Error] Too few arguments provided.\nExpected use:\n\tcbuild <action> [<arguments> ...]\n");
+	return errorCode(ErrorCode::TOO_FEW_CMD_ARGS);
+}
+
+int unresolvedAction(const std::string action) {
+	printf("[Error] Unknown action provided: %s provided\n", action.c_str());
+	printf("[Info] Valid actions are init, pull, and package\n");
+	return errorCode(ErrorCode::UNRESOLVED_ACTION);
+}
+
+bool isValidProjectName(const std::string projectName) {
+	std::regex pattern("[a-zA-Z0-9\\-_]+");
+	return std::regex_match(projectName, pattern);
+}
+
+int init(const std::vector<std::string> arguments) {
+// Input validation
+	if (arguments.size() < 2) {
+		printf("[Error] No project name provided.\nExpected use:\n\tcbuild init <project_name>\n");
+		return errorCode(ErrorCode::TOO_FEW_CMD_ARGS);
+	}
+
+	std::string projectName = arguments[1];
+	if (!isValidProjectName(projectName)) {
+		printf("[Error] Desired project name is invalid. Name must contain only letters, numbers, dash (-), or underscore (_).\n");
+		return errorCode(ErrorCode::INVALID_PROJECT_NAME);
+	}
+
+// Setup new project structure
+	fs::path projectRoot(projectName);
+	if (fs::exists(projectRoot)) {
+		printf("[Error] Project name conflicts with existing directory.\n");
+		return errorCode(ErrorCode::CONFLICTING_PROJECT_DIRECTORY);
+	}
+
+	if (!fs::create_directory(projectRoot)) {
+		printf("[Error] Failed to create project directory.\n");
+		return errorCode(ErrorCode::COULD_NOT_CREATE_DIRECTORY);
+	}
+
+	fs::path includeDir = projectRoot / "include";
+	if (!fs::create_directory(includeDir)) {
+		printf("[Error] Failed to create \"includes\" directory.\n");
+		return errorCode(ErrorCode::COULD_NOT_CREATE_DIRECTORY);
+	}
+
+	fs::path srcDir = projectRoot / "src";
+	if (!fs::create_directory(srcDir)) {
+		printf("[Error] Failed to create \"src\" directory.\n");
+		return errorCode(ErrorCode::COULD_NOT_CREATE_DIRECTORY);
+	}
+
+	fs::path testDir = projectRoot / "test";
+	if (!fs::create_directory(testDir)) {
+		printf("[Error] Failed to create \"test\" directory.\n");
+		return errorCode(ErrorCode::COULD_NOT_CREATE_DIRECTORY);
+	}
+
+	fs::path starterCode = testDir / "main.c";
+	std::ofstream starterCodeFile(starterCode);
+	if (!starterCodeFile.is_open()) {
+		printf("[Error] Failed to create \"main.c\".\n");
+		return errorCode(ErrorCode::COULD_NOT_CREATE_FILE);
+	}
+	starterCodeFile << "\nint main() {\n\treturn 0;\n}\n";
+	starterCodeFile.close();
+
+	// Future feature idea: Make a command line arg to specify your own makefile template
+	Template makefileTemplate(make::makefile);
+
+	// Debug printing
+	//std::cout << "Keys:" << std::endl;
+	//for (auto key : makefileTemplate.getKeys()) {
+	//	std::cout << key << std::endl;
+	//}
+
+	// Ask for project parameters needed for makefile
+	printf("Which platform will this project compile for? [Default: x86_64]\n>");
+	std::string platform;
+	std::getline(std::cin, platform);
+	if (platform.empty()) {
+		platform = "x86_64";
+	}
+
+	printf("Enter the release library file name? (Ex. MyLib.lib)\n>");
+	std::string libraryName;
+	std::getline(std::cin, libraryName);
+	if (libraryName.empty()) {
+		printf("[Error] Failure to collect release library file name from user input.\n");
+		return errorCode(ErrorCode::INVALID_MAKEFILE_INPUT);
+	}
+
+	printf("Enter the debug library file name? (Ex. MyLib-d.lib)\n>");
+	std::string debugLibraryName;
+	std::getline(std::cin, debugLibraryName);
+	if (debugLibraryName.empty()) {
+		printf("[Error] Failure to collect debug library file name from user input.\n");
+		return errorCode(ErrorCode::INVALID_MAKEFILE_INPUT);
+	}
+
+	// Dynamically load these based on a config or command prompt input
+	std::map<std::string, std::string> makefileInserts;
+	makefileInserts["includes"    ] = "-I \"./include\""; // can get the others later by parsing file structure // -I \"./include/OpenCL/Nvidia\"";
+	makefileInserts["platform"    ] = platform; // build.cfg, could be asked on init and auto populate the build.cfg
+	makefileInserts["libs"        ] = ""; // can get later with dependencies.cfg // "-l \"CDebugHelper\" -l \"OpenCL_nvidia\"";
+	makefileInserts["debugLibs"   ] = ""; // same as previous // "-l \"CDebugHelper-d\" -l \"OpenCL_nvidia\"";
+	makefileInserts["library"     ] = libraryName; // ask at init // "CMatrixLib.lib";
+	makefileInserts["debugLibrary"] = debugLibraryName; // ask at init // "CMatrixLib-d.lib";
+
+	if (!makefileTemplate.fillTemplate(makefileInserts)) {
+		printf("[Error] Failed to create makefile from template.\n");
+		return errorCode(ErrorCode::MAKEFILE_TEMPLATE_ERROR);
+	}
+	 
+	// Write makefile
+	fs::path makefilePath = projectRoot / "makefile";
+	std::ofstream makefile(makefilePath);
+	if (makefile.is_open()) {
+		makefile << makefileTemplate.getFilledTemplate();
+		makefile.close();
+	}
+	else {
+		printf("[Error] Failed to write makefile.\n");
+		return errorCode(ErrorCode::MAKEFILE_CREATION_ERROR);
+	}
+
+	// Create dependencies config
+	fs::path dependenciesConfigPath = projectRoot / "dependencies.cfg";
+	std::ofstream dependenciesConfig(dependenciesConfigPath);
+	if (dependenciesConfig.is_open()) {
+		dependenciesConfig << "# C-Build-System config v1\n";
+		dependenciesConfig.close();
+	}
+	else {
+		printf("[Error] Failed to write dependencies.cfg.\n");
+		return errorCode(ErrorCode::DEPENDENCIES_CONFIG_CREATION_ERROR);
+	}
+
+	printf("Successfully create new project: %s\n", projectName.c_str());
+	return errorCode(ErrorCode::SUCCESS);
+}
+
+int pull() {
+
+
+	return errorCode(ErrorCode::UNIMPLEMENTED);
+}
+
+int package(const std::vector<std::string> arguments) {
+	return errorCode(ErrorCode::UNIMPLEMENTED);
 }
 
 int main(const int argc, const char** argv) {
@@ -199,10 +358,39 @@ int main(const int argc, const char** argv) {
 	//remoteDependenciesTest();
 	//remoteLocalMixTest();
 
+	// 1-20-2024
+	if (argc < 2) {
+		return unexpectedArgCount();
+	}
+	else {
+		std::vector<std::string> arguments;
+		for (int i = 1; i < argc; i++) {
+			arguments.push_back(std::string(argv[i]));
+		}
+
+		std::string action = arguments[0];
+		if (action == "init") {
+			return init(arguments);
+		}
+		if (action == "pull") {
+			return pull();
+		}
+		if (action == "package") {
+			return package(arguments);
+		}
+		else {
+			return unresolvedAction(action);
+		}
+	}
+
+	return 0;
+
+	
+	// pre 1-20-2024
 	switch (argc) {
 	//case 1: return newCurlTest();
 	case 1 : return defaultBuild();
-	default: return unexpectedArgCount(argc);
+	default: return unexpectedArgCount();
 	}
 
 	return 0;
