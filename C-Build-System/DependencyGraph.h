@@ -36,16 +36,16 @@ public:
 		}
 	}
 
-	std::stack<const Dependency*> getTopologicalOrder() const {
-		std::stack<const Dependency*> dependencies;
-		std::stack<const Dependency*> dependenciesToVisit;
+	std::stack<Dependency*> getTopologicalOrder() {
+		std::stack<Dependency*> dependencies;
+		std::stack<Dependency*> dependenciesToVisit;
 		dependenciesToVisit.push(&root);
 
 		while (!dependenciesToVisit.empty()) {
-			const Dependency* currentDependency = dependenciesToVisit.top();
+			Dependency* currentDependency = dependenciesToVisit.top();
 			dependenciesToVisit.pop();
 			std::cout << "Repo: " << currentDependency->repo << "\tOwner: " << currentDependency->owner << "\tTag: " << currentDependency->tag << std::endl;
-			for (const auto& dependency : currentDependency->directDependencies) {
+			for (auto& dependency : currentDependency->directDependencies) {
 				std::cout << currentDependency->repo << " -> " << dependency.repo << std::endl;
 				dependenciesToVisit.push(&dependency);
 				dependencies.push(&dependency);

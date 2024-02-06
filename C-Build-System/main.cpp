@@ -162,13 +162,13 @@ int defaultBuild() {
 
 	DependencyGraph dependencyGraph(config);
 
-	std::stack<const Dependency*> dependenciesToPull = dependencyGraph.getTopologicalOrder();
-	while (!dependenciesToPull.empty()) {
-		const Dependency* dependencyToPull = dependenciesToPull.top();
-		std::cout << "Pulling " << dependencyToPull->repo << std::endl;
-		dependencyToPull->pullFiles("include/dependencies", releaseLibsDir + "/", debugLibsDir + "/");
-		dependenciesToPull.pop();
-	}
+	//std::stack<const Dependency*> dependenciesToPull = dependencyGraph.getTopologicalOrder();
+	//while (!dependenciesToPull.empty()) {
+	//	const Dependency* dependencyToPull = dependenciesToPull.top();
+	//	std::cout << "Pulling " << dependencyToPull->repo << std::endl;
+	//	dependencyToPull->pullFiles("include/dependencies", releaseLibsDir + "/", debugLibsDir + "/");
+	//	dependenciesToPull.pop();
+	//}
 
 	return errorCode(ErrorCode::SUCCESS);
 }
@@ -284,25 +284,23 @@ int init(const std::vector<std::string> arguments) {
 		platform = "x86_64";
 	}
 
-	printf("Enter the release library file name? (Ex. MyLib.lib)\n>");
+	printf("Enter the release library file name? [Default: %s.lib]\n>", projectName.c_str());
 	std::string libraryName;
 	std::getline(std::cin, libraryName);
 	if (libraryName.empty()) {
-		printf("[Error] Failure to collect release library file name from user input.\n");
-		return errorCode(ErrorCode::INVALID_MAKEFILE_INPUT);
+		libraryName = projectName + ".lib";
 	}
 
-	printf("Enter the debug library file name? (Ex. MyLib-d.lib)\n>");
+	printf("Enter the debug library file name? [Default: %s-d.lib]\n>", projectName.c_str());
 	std::string debugLibraryName;
 	std::getline(std::cin, debugLibraryName);
 	if (debugLibraryName.empty()) {
-		printf("[Error] Failure to collect debug library file name from user input.\n");
-		return errorCode(ErrorCode::INVALID_MAKEFILE_INPUT);
+		debugLibraryName = projectName + "-d.lib";
 	}
 
 	// Dynamically load these based on a config or command prompt input
 	std::map<std::string, std::string> makefileInserts;
-	makefileInserts["includes"    ] = "-I \"./include\""; // can get the others later by parsing file structure // -I \"./include/OpenCL/Nvidia\"";
+	makefileInserts["includes"    ] = "-I \"./include\" -I \"./include/dependencies\"";
 	makefileInserts["platform"    ] = platform; // build.cfg, could be asked on init and auto populate the build.cfg
 	makefileInserts["libs"        ] = ""; // can get later with dependencies.cfg // "-l \"CDebugHelper\" -l \"OpenCL_nvidia\"";
 	makefileInserts["debugLibs"   ] = ""; // same as previous // "-l \"CDebugHelper-d\" -l \"OpenCL_nvidia\"";
@@ -342,13 +340,96 @@ int init(const std::vector<std::string> arguments) {
 	return errorCode(ErrorCode::SUCCESS);
 }
 
+#include <set>
+#include <queue>
+
 int pull() {
 
+	fs::path config("dependencies.cfg");
 
-	return errorCode(ErrorCode::UNIMPLEMENTED);
+	DependencyGraph dependencyGraph(config);
+
+	// hardcoded for now
+	std::string releaseLibsDir = "lib/release/x86_64";
+	std::string debugLibsDir = "lib/debug/x86_64";
+
+	std::stack<Dependency*> dependenciesToPull = dependencyGraph.getTopologicalOrder();
+	std::set<Dependency> alreadyProcessed;
+	std::queue<const Dependency*> linkOrder;
+	while (!dependenciesToPull.empty()) {
+		Dependency* dependencyToPull = dependenciesToPull.top();
+		if (alreadyProcessed.find(*dependencyToPull) == alreadyProcessed.end()) {
+			alreadyProcessed.insert(*dependencyToPull);
+			linkOrder.push(dependencyToPull);
+			std::cout << "Pulling " << dependencyToPull->repo << std::endl;
+			// See and potentially fix how dependencies with conflicting namespaces are handled
+			dependencyToPull->pullFiles("include/dependencies", releaseLibsDir + "/", debugLibsDir + "/");
+		}
+		dependenciesToPull.pop();
+	}
+
+	std::string libs;
+	std::string libsDebug;
+	while (!linkOrder.empty()) {
+		const Dependency* dependency = linkOrder.front();
+		linkOrder.pop();
+		std::string makefileString = fs::path(dependency->releaseLibFilename).stem().string();
+		std::string makefileStringDebug = fs::path(dependency->debugLibFilename).stem().string();
+		libs += " -l \"" + makefileString + "\"";
+		libsDebug += " -l \"" + makefileStringDebug + "\"";
+	}
+
+	std::cout << " -> " << libs << std::endl;
+	std::cout << " -> " << libsDebug << std::endl;
+
+	if (!make::replaceVarDeclaration("makefile", "LIBS_R", libs)) {
+		std::cout << "Uh oh 1" << std::endl;
+		return -1;
+	}
+	if (!make::replaceVarDeclaration("makefile", "LIBS_D", libsDebug)) {
+		std::cout << "Uh oh 2" << std::endl;
+		return -1;
+	}
+
+	return errorCode(ErrorCode::SUCCESS);
 }
 
 int package(const std::vector<std::string> arguments) {
+	// not sure what I planned to do with the arguments
+
+	fs::path packageDir("Package");
+	if (fs::exists(packageDir)) {
+		// need to check success
+		fs::remove_all(packageDir);
+	}
+	fs::create_directory(packageDir);
+
+	// Package dependencies.cfg
+	fs::path config("dependencies.cfg");
+	if (!fs::exists(config)) {
+		// TODO handle error
+	}
+
+	if (!fs::copy_file(config, packageDir / config)) {
+		// TODO handle error
+	}
+
+
+	// Package .lib files
+
+	// hardcoded for now
+	std::string releaseLibsDir = "lib/release/x86_64";
+	std::string debugLibsDir = "lib/debug/x86_64";
+	// incorrect assumption, libraries dont need to share name with project name
+	fs::path releaseLib = fs::path(releaseLibsDir).make_preferred() / fs::path(fs::current_path().filename().string() + ".lib");
+	fs::path debugLib = fs::path(debugLibsDir).make_preferred() / fs::path(fs::current_path().filename().string() + "-d.lib");
+
+	fs::copy_file(releaseLib, packageDir / releaseLib.filename());
+	fs::copy_file(debugLib, packageDir / debugLib.filename());
+
+
+	// Package include.zip
+
 	return errorCode(ErrorCode::UNIMPLEMENTED);
 }
 

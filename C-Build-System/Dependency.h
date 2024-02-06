@@ -23,6 +23,8 @@ public:
 	std::string repo; // "." means the current project
 	std::string owner; // "local" means dependency is not to be retrieved remotely; it is the user's responsibility
 	std::string tag; // ex: v1.0
+	std::string releaseLibFilename;
+	std::string debugLibFilename;
 	std::vector<Dependency> directDependencies;
 
 	Dependency() {}
@@ -73,7 +75,7 @@ public:
 		// actually download and cache dependencies
 	}
 
-	bool pullFiles(const std::string& includesDest, const std::string& releaseLibsDir, const std::string& debugLibsDir) const {
+	bool pullFiles(const std::string& includesDest, const std::string& releaseLibsDir, const std::string& debugLibsDir) {
 		std::string baseUrl = "https://github-repos-371306945901.s3.amazonaws.com";
 		baseUrl += "/" + owner;
 		baseUrl += "/" + repo;
@@ -100,8 +102,8 @@ public:
 		}
 
 		std::vector<std::string> fileList = helpers::readLines(curlCommand.fileArguments[0].outputFilepath);
-		std::string debugLibFilename = getDebugLibFilename(fileList);
-		std::string releaseLibFilename = getReleaseLibFilename(fileList);
+		debugLibFilename = getDebugLibFilename(fileList);
+		releaseLibFilename = getReleaseLibFilename(fileList);
 
 		for(std::string filename : fileList) {
 			curlCommand.fileArguments[0].fileUrl = baseUrl + filename;
@@ -151,11 +153,15 @@ public:
 		}
 	}
 
-	bool operator<(const Dependency& other) const  {
+	bool operator<(const Dependency& other) const {
 		if (repo  != other.repo)  return repo  < other.repo;
 		if (owner != other.owner) return owner < other.owner;
 		if (tag   != other.tag)   return tag < other.tag;
 		return false;
+	}
+
+	bool operator==(const Dependency& other) const {
+		return (repo == other.repo and owner == other.owner and tag == other.tag);
 	}
 
 private:
@@ -164,7 +170,7 @@ private:
 	}
 
 	bool isCached() const {
-		return fs::exists(fs::path(localReposDir)/owner/repo/tag/"dependencies.cfg");
+		return fs::exists(fs::path(localReposDir) / owner / repo / tag / "dependencies.cfg");
 	}
 
 	std::string getDebugLibFilename(const std::vector<std::string>& fileList) const {		

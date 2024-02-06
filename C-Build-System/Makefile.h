@@ -1,5 +1,7 @@
 #pragma once
 #include <string>
+#include <fstream>
+#include <filesystem>
 
 namespace make {
 	/*
@@ -41,7 +43,7 @@ namespace make {
 		"LIBDIR   := \"./lib/release/{{platform}}\"\n"
 		"LIBDIR_D := \"./lib/debug/{{platform}}\"\n"
 		"# LIBS should be most ambiguous to least ambiguous\n"
-		"LIBS   := {{libs}}\n"
+		"LIBS_R   := {{libs}}\n"
 		"LIBS_D := {{debugLibs}}\n"
 		"\n"
 		"LIBRARY   := lib/release/{{platform}}/{{library}}\n"
@@ -112,7 +114,7 @@ namespace make {
 		"# https://www.gnu.org/software/make/manual/make.html#Static-Usage\n"
 		"$(filter build/release/%.o,$(OBJ)): build/release/%.o: %.c\n"
 		"\t@echo Building $< \n"
-		"\t$(CC) $(CFLAGS) -c $< -o $@ $(INCLUDES) -L $(LIBDIR) $(LIBS)\n"
+		"\t$(CC) $(CFLAGS) -c $< -o $@ $(INCLUDES) -L $(LIBDIR) $(LIBS_R)\n"
 		"\n"
 		"$(filter build/debug/%.o,$(OBJ_D)): build/debug/%.o: %.c\n"
 		"\t@echo Building $< \n"
@@ -127,7 +129,7 @@ namespace make {
 		"\t$(MAKE) debug_executable CFLAGS=\"-DDEBUG $(CFLAGS)\"\n"
 		"\n"
 		"release_executable: release_library\n"
-		"\t$(LD) $(CFLAGS) $(TEST_SRC) -o $(EXECUTABLE) $(INCLUDES) -L . -l $(basename $(LIBRARY)) -L $(LIBDIR) $(LIBS)\n"
+		"\t$(LD) $(CFLAGS) $(TEST_SRC) -o $(EXECUTABLE) $(INCLUDES) -L . -l $(basename $(LIBRARY)) -L $(LIBDIR) $(LIBS_R)\n"
 		"\n"
 		"release_library: $(LIBDIR) $(BUILD_DIR) $(OBJ)\n"
 		"\t$(AR) rcs $(LIBRARY) $(foreach obj,$(OBJ), -o $(obj))\n"
@@ -156,4 +158,62 @@ namespace make {
 		"\t@$(DELETE) $(LIBRARY_D)\n"
 		"endif\n"
 		"\tmkdir build\n";
+
+		namespace fs = std::filesystem;
+
+		inline bool replaceVarDeclaration(fs::path makefilePath, const std::string varName, const std::string newValue) {
+			if (!fs::exists(makefilePath)) {
+				printf("1\n");
+				return false;
+			}
+			
+			std::ifstream makefile(makefilePath);
+			
+			if (!makefile.is_open()) {
+				printf("2\n");
+				return false;
+			}
+
+			// go to beginning of file
+			makefile.clear();
+			makefile.seekg(0);
+
+			bool foundFlag = false;
+			std::vector<std::string> newFileLines;
+			std::string line;
+			while (std::getline(makefile, line)) {
+				std::string::size_type found = line.find(varName);
+				std::string::size_type foundEquals = line.find(":=");
+				if (found != std::string::npos && foundEquals != std::string::npos && found < foundEquals) {
+					printf("[FOUND IT]\n");
+					newFileLines.push_back(varName + " := " + newValue);
+					foundFlag = true;
+				}
+				else {
+					newFileLines.push_back(line);
+				}
+			}
+
+			if (!foundFlag) {
+				printf("3\n");
+				return false;
+			}
+
+			makefile.close();
+
+			// rewrite file
+			std::ofstream newMakefile(makefilePath);
+			if (!newMakefile.is_open()) {
+				printf("4\n");
+				return false;
+			}
+
+			for (auto& newLine : newFileLines) {
+				newMakefile << newLine << std::endl;
+			}
+			
+			newMakefile.close();
+
+			return true;
+		}
 }
